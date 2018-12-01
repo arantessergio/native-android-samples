@@ -1,22 +1,32 @@
 package client.github.ar.com.br.githubclient;
 
+import android.annotation.SuppressLint;
+import android.app.Activity;
+import android.content.Intent;
 import android.os.AsyncTask;
 import android.os.Bundle;
+import android.support.design.widget.Snackbar;
+import android.support.v4.view.MenuItemCompat;
 import android.support.v4.widget.SwipeRefreshLayout;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
+import android.support.v7.widget.SearchView;
+import android.view.Menu;
+import android.view.MenuItem;
+import android.view.View;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 
 import client.github.ar.com.br.githubclient.adapters.MyItemDecoration;
 import client.github.ar.com.br.githubclient.adapters.RepoItemAdapter;
 import client.github.ar.com.br.githubclient.models.Repo;
+import client.github.ar.com.br.githubclient.pages.Details;
 import client.github.ar.com.br.githubclient.services.GithubService;
+import client.github.ar.com.br.githubclient.services.RetrofitGenerator;
 import retrofit2.Call;
-import retrofit2.Retrofit;
-import retrofit2.converter.gson.GsonConverterFactory;
 
 public class MainActivity extends AppCompatActivity implements SwipeRefreshLayout.OnRefreshListener {
 
@@ -32,12 +42,7 @@ public class MainActivity extends AppCompatActivity implements SwipeRefreshLayou
 
         this.initGUI();
 
-        Retrofit retrofit = new Retrofit.Builder()
-                .baseUrl("https://api.github.com/")
-                .addConverterFactory(GsonConverterFactory.create())
-                .build();
-
-        this.service = retrofit.create(GithubService.class);
+        this.service = RetrofitGenerator.getInstance();
 
         this.configureActions();
 
@@ -46,12 +51,7 @@ public class MainActivity extends AppCompatActivity implements SwipeRefreshLayou
     private void configureActions() {
 
         this.refresher.setOnRefreshListener(this);
-        this.refresher.post(new Runnable() {
-            @Override
-            public void run() {
-                new AsyncGithubTask().execute();
-            }
-        });
+        this.refresher.post(() -> new AsyncGithubTask(MainActivity.this, null).execute());
 
     }
 
@@ -67,17 +67,71 @@ public class MainActivity extends AppCompatActivity implements SwipeRefreshLayou
         this.listView.addItemDecoration(new MyItemDecoration(this, LinearLayoutManager.VERTICAL));
     }
 
+    private void navigate(Integer id) {
+        Intent intent = new Intent(this, Details.class);
+
+        intent.putExtra("repoId", id);
+
+        startActivity(intent);
+
+    }
+
     @Override
-    public void onRefresh() {
-        runOnUiThread(new Runnable() {
+    public boolean onCreateOptionsMenu(Menu menu) {
+        this.getMenuInflater().inflate(R.menu.main, menu);
+
+        MenuItem item = menu.findItem(R.id.action_search);
+        MenuItemCompat.setOnActionExpandListener(item, new MenuItemCompat.OnActionExpandListener() {
+
             @Override
-            public void run() {
-                new AsyncGithubTask().execute();
+            public boolean onMenuItemActionExpand(MenuItem menuItem) {
+                return true;
+            }
+
+            @Override
+            public boolean onMenuItemActionCollapse(MenuItem menuItem) {
+                return true;
             }
         });
+
+        SearchView searchView = (SearchView) MenuItemCompat.getActionView(item);
+
+        searchView.setOnQueryTextListener(new SearchView.OnQueryTextListener() {
+
+            @Override
+            public boolean onQueryTextSubmit(String query) {
+
+                new AsyncGithubTask(MainActivity.this, query).execute();
+
+                return false;
+            }
+
+            @Override
+            public boolean onQueryTextChange(String newText) {
+                return false;
+            }
+        });
+
+        return super.onCreateOptionsMenu(menu);
+    }
+
+    @Override
+    public void onRefresh() {
+        runOnUiThread(() -> new AsyncGithubTask(MainActivity.this, null).execute());
     }
 
     private class AsyncGithubTask extends AsyncTask<Void, Void, List<Repo>> {
+
+        private Activity context;
+        private String username;
+
+        public AsyncGithubTask(
+                Activity context,
+                String username
+        ) {
+            this.context = context;
+            this.username = username;
+        }
 
 
         @Override
@@ -90,28 +144,53 @@ public class MainActivity extends AppCompatActivity implements SwipeRefreshLayou
         @Override
         protected List<Repo> doInBackground(Void... voids) {
 
-            Call<List<Repo>> call = service.listRepositories();
-
             try {
-                List<Repo> body = call.execute().body();
+                List<Repo> list;
 
-                return body;
+                Call<List<Repo>> call = null;
+
+                if (this.username != null) {
+                    call = service.listReposByUser(this.username);
+                } else {
+                    call = service.listRepositories();
+
+                }
+                list = call.execute().body();
+
+                return list;
+
             } catch (IOException e) {
                 e.printStackTrace();
             }
 
-            return null;
+            return new ArrayList<>();
+
         }
 
+        @SuppressLint("CheckResult")
         @Override
         protected void onPostExecute(List<Repo> repos) {
             super.onPostExecute(repos);
 
-            RepoItemAdapter adapter = new RepoItemAdapter(repos);
+            if (repos != null) {
+                RepoItemAdapter adapter = new RepoItemAdapter(repos, context);
 
-            listView.setAdapter(adapter);
+                listView.setAdapter(adapter);
 
+                adapter.getItemClicked().subscribe(t -> navigate(t.getId()));
+
+            } else {
+
+                listView.setVisibility(View.GONE);
+
+                Snackbar.make(
+                        context.findViewById(R.id.contentMain),
+                        "Nenhum repositório encontrado para este usuário!",
+                        Snackbar.LENGTH_LONG
+                ).show();
+            }
             refresher.setRefreshing(false);
+
         }
     }
 }

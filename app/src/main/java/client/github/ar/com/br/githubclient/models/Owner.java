@@ -3,8 +3,8 @@ package client.github.ar.com.br.githubclient.models;
 public class Owner {
 
     private Integer id;
-    private String name;
-    private String avatar;
+    private String login;
+    private String avatar_url;
 
     public Integer getId() {
         return id;
@@ -14,19 +14,19 @@ public class Owner {
         this.id = id;
     }
 
-    public String getName() {
-        return name;
+    public String getLogin() {
+        return login;
     }
 
-    public void setName(String name) {
-        this.name = name;
+    public void setLogin(String login) {
+        this.login = login;
     }
 
-    public String getAvatar() {
-        return avatar;
+    public String getAvatar_url() {
+        return avatar_url;
     }
 
-    public void setAvatar(String avatar) {
-        this.avatar = avatar;
+    public void setAvatar_url(String avatar_url) {
+        this.avatar_url = avatar_url;
     }
 }

@@ -15,4 +15,7 @@ public interface GithubService {
     @GET("repositories")
     Call<List<Repo>> listRepositories();
 
+    @GET("repositories/{id}")
+    Call<Repo> getRepo(@Path("id") Integer id);
+
 }
