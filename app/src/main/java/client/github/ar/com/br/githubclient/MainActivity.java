@@ -5,7 +5,7 @@ import android.app.Activity;
 import android.content.Intent;
 import android.os.AsyncTask;
 import android.os.Bundle;
-import android.support.design.widget.Snackbar;
+import android.support.annotation.NonNull;
 import android.support.v4.view.MenuItemCompat;
 import android.support.v4.widget.SwipeRefreshLayout;
 import android.support.v7.app.AppCompatActivity;
@@ -14,7 +14,6 @@ import android.support.v7.widget.RecyclerView;
 import android.support.v7.widget.SearchView;
 import android.view.Menu;
 import android.view.MenuItem;
-import android.view.View;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -32,8 +31,16 @@ public class MainActivity extends AppCompatActivity implements SwipeRefreshLayou
 
     private GithubService service;
     private RecyclerView listView;
-    private RecyclerView.LayoutManager mLayoutManager;
+    private LinearLayoutManager mLayoutManager;
     private SwipeRefreshLayout refresher;
+    private String query;
+    private int page = 1;
+
+    private List<Repo> publicRepos = new ArrayList<>();
+    private List<Repo> byUsers = new ArrayList<>();
+
+    private boolean loading = true;
+    int pastVisibleItems, visibleItemCount, totalItemCount;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -51,7 +58,30 @@ public class MainActivity extends AppCompatActivity implements SwipeRefreshLayou
     private void configureActions() {
 
         this.refresher.setOnRefreshListener(this);
-        this.refresher.post(() -> new AsyncGithubTask(MainActivity.this, null).execute());
+        this.refresher.post(() -> new AsyncGithubTask(MainActivity.this, query, page).execute());
+
+        this.listView.addOnScrollListener(new RecyclerView.OnScrollListener() {
+            @Override
+            public void onScrolled(@NonNull RecyclerView recyclerView, int dx, int dy) {
+                if (dy > 0) {
+                    visibleItemCount = mLayoutManager.getChildCount();
+                    totalItemCount = mLayoutManager.getItemCount();
+                    pastVisibleItems = mLayoutManager.findFirstVisibleItemPosition();
+
+                    if (loading && query != null && !query.equals("")) {
+                        if ((visibleItemCount + pastVisibleItems) >= totalItemCount) {
+                            loading = false;
+
+                            page = page + 1;
+
+                            new AsyncGithubTask(MainActivity.this, query, page).execute();
+
+                            loading = true;
+                        }
+                    }
+                }
+            }
+        });
 
     }
 
@@ -65,6 +95,7 @@ public class MainActivity extends AppCompatActivity implements SwipeRefreshLayou
         this.mLayoutManager = new LinearLayoutManager(this);
         this.listView.setLayoutManager(this.mLayoutManager);
         this.listView.addItemDecoration(new MyItemDecoration(this, LinearLayoutManager.VERTICAL));
+
     }
 
     private void navigate(Integer id) {
@@ -101,9 +132,11 @@ public class MainActivity extends AppCompatActivity implements SwipeRefreshLayou
             @Override
             public boolean onQueryTextSubmit(String query) {
 
-                new AsyncGithubTask(MainActivity.this, query).execute();
+                MainActivity.this.query = query;
 
-                return false;
+                new AsyncGithubTask(MainActivity.this, query, page).execute();
+
+                return true;
             }
 
             @Override
@@ -117,20 +150,23 @@ public class MainActivity extends AppCompatActivity implements SwipeRefreshLayou
 
     @Override
     public void onRefresh() {
-        runOnUiThread(() -> new AsyncGithubTask(MainActivity.this, null).execute());
+        runOnUiThread(() -> new AsyncGithubTask(MainActivity.this, query, page).execute());
     }
 
     private class AsyncGithubTask extends AsyncTask<Void, Void, List<Repo>> {
 
         private Activity context;
         private String username;
+        private Integer page;
 
         public AsyncGithubTask(
                 Activity context,
-                String username
+                String username,
+                Integer page
         ) {
             this.context = context;
             this.username = username;
+            this.page = page;
         }
 
 
@@ -145,19 +181,32 @@ public class MainActivity extends AppCompatActivity implements SwipeRefreshLayou
         protected List<Repo> doInBackground(Void... voids) {
 
             try {
-                List<Repo> list;
 
                 Call<List<Repo>> call = null;
 
+                List<Repo> result = new ArrayList<>();
+
                 if (this.username != null) {
-                    call = service.listReposByUser(this.username);
+                    call = service.listReposByUser(this.username, this.page, 10);
+
+                    result = call.execute().body();
+
+                    if (result != null && result.size() > 0) {
+                        byUsers.addAll(result);
+                    }
+
                 } else {
                     call = service.listRepositories();
 
-                }
-                list = call.execute().body();
+                    result = call.execute().body();
 
-                return list;
+                    if (result != null && result.size() > 0) {
+                        publicRepos.addAll(result);
+                    }
+
+                }
+
+                return result;
 
             } catch (IOException e) {
                 e.printStackTrace();
@@ -167,30 +216,36 @@ public class MainActivity extends AppCompatActivity implements SwipeRefreshLayou
 
         }
 
-        @SuppressLint("CheckResult")
         @Override
         protected void onPostExecute(List<Repo> repos) {
             super.onPostExecute(repos);
 
-            if (repos != null) {
-                RepoItemAdapter adapter = new RepoItemAdapter(repos, context);
-
-                listView.setAdapter(adapter);
-
-                adapter.getItemClicked().subscribe(t -> navigate(t.getId()));
-
+            if (query != null && !query.equals("")) {
+                this.handleListByUser();
             } else {
-
-                listView.setVisibility(View.GONE);
-
-                Snackbar.make(
-                        context.findViewById(R.id.contentMain),
-                        "Nenhum repositório encontrado para este usuário!",
-                        Snackbar.LENGTH_LONG
-                ).show();
+                this.handlePublicList();
             }
+
             refresher.setRefreshing(false);
 
+        }
+
+        @SuppressLint("CheckResult")
+        private void handlePublicList() {
+            RepoItemAdapter adapter = new RepoItemAdapter(publicRepos, context);
+
+            adapter.getItemClicked().subscribe(t -> navigate(t.getId()));
+
+            listView.setAdapter(adapter);
+        }
+
+        @SuppressLint("CheckResult")
+        private void handleListByUser() {
+            RepoItemAdapter adapter = new RepoItemAdapter(byUsers, MainActivity.this);
+
+            adapter.getItemClicked().subscribe(t -> navigate(t.getId()));
+
+            listView.setAdapter(adapter);
         }
     }
 }

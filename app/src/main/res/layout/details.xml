@@ -60,6 +60,20 @@
             android:paddingTop="10dp"
             android:textAlignment="center"/>
 
+        <TextView
+            android:id="@+id/detailsRepoIssuesNumber"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:paddingTop="10dp"
+            android:textAlignment="center"/>
+
+        <TextView
+            android:id="@+id/detailsRepoForksNumber"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:paddingTop="10dp"
+            android:textAlignment="center"/>
+
     </LinearLayout>
 
 </android.widget.LinearLayout>

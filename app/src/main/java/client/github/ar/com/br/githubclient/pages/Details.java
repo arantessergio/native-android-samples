@@ -6,6 +6,7 @@ import android.os.AsyncTask;
 import android.os.Bundle;
 import android.support.annotation.Nullable;
 import android.support.v7.app.AppCompatActivity;
+import android.view.View;
 import android.widget.ImageView;
 import android.widget.TextView;
 
@@ -33,6 +34,8 @@ public class Details extends AppCompatActivity {
     private TextView repoDescriptionTextView;
     private TextView repoUpdatedAtTextView;
     private TextView repoLicenseName;
+    private TextView issuesNumberTextView;
+    private TextView forksCountTextView;
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
@@ -58,6 +61,8 @@ public class Details extends AppCompatActivity {
         this.repoDescriptionTextView = findViewById(R.id.detailsRepoDescription);
         this.repoUpdatedAtTextView= findViewById(R.id.detailsRepoUpdatedAt);
         this.repoLicenseName = findViewById(R.id.detailsRepoLicenseName);
+        this.issuesNumberTextView = findViewById(R.id.detailsRepoIssuesNumber);
+        this.forksCountTextView = findViewById(R.id.detailsRepoForksNumber);
     }
 
     private void applyInformations(Repo repo) {
@@ -75,6 +80,8 @@ public class Details extends AppCompatActivity {
         String license = repo.getLicense_name();
 
         this.repoLicenseName.setText("Licença: " + (license != null ? license : "NA"));
+        this.issuesNumberTextView.setText("Issues abertas: " + repo.getOpen_issues_count());
+        this.forksCountTextView.setText("Forks: " + repo.getForks_count());
 
         Owner owner = repo.getOwner();
 
