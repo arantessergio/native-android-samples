@@ -39,8 +39,10 @@ public class MainActivity extends AppCompatActivity implements SwipeRefreshLayou
     private List<Repo> publicRepos = new ArrayList<>();
     private List<Repo> byUsers = new ArrayList<>();
 
-    private boolean loading = true;
-    int pastVisibleItems, visibleItemCount, totalItemCount;
+    private boolean loading = false;
+    private boolean reachEnd = false;
+
+    private int mPreviousTotal = 0;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -63,23 +65,25 @@ public class MainActivity extends AppCompatActivity implements SwipeRefreshLayou
         this.listView.addOnScrollListener(new RecyclerView.OnScrollListener() {
             @Override
             public void onScrolled(@NonNull RecyclerView recyclerView, int dx, int dy) {
-                if (dy > 0) {
-                    visibleItemCount = mLayoutManager.getChildCount();
-                    totalItemCount = mLayoutManager.getItemCount();
-                    pastVisibleItems = mLayoutManager.findFirstVisibleItemPosition();
+            int visibleItemCount = recyclerView.getChildCount();
+            int totalItemCount = recyclerView.getLayoutManager().getItemCount();
+            int firstVisibleItem = ((LinearLayoutManager) recyclerView.getLayoutManager()).findFirstVisibleItemPosition();
 
-                    if (loading && query != null && !query.equals("")) {
-                        if ((visibleItemCount + pastVisibleItems) >= totalItemCount) {
-                            loading = false;
-
-                            page = page + 1;
-
-                            new AsyncGithubTask(MainActivity.this, query, page).execute();
-
-                            loading = true;
-                        }
-                    }
+            if (loading && query != null && !query.equals("")) {
+                if (totalItemCount > mPreviousTotal) {
+                    loading = false;
+                    mPreviousTotal = totalItemCount;
                 }
+            }
+            if (!loading && query != null && !query.equals("") && (totalItemCount - visibleItemCount) <= (firstVisibleItem + visibleItemCount) && !reachEnd) {
+
+                page = page + 1;
+
+                new AsyncGithubTask(MainActivity.this, query, page).execute();
+
+                loading = true;
+            }
+
             }
         });
 
@@ -145,6 +149,15 @@ public class MainActivity extends AppCompatActivity implements SwipeRefreshLayou
             }
         });
 
+        searchView.setOnCloseListener(() -> {
+
+            query = null;
+
+            listView.setAdapter(new RepoItemAdapter(publicRepos, MainActivity.this));
+
+            return true;
+        });
+
         return super.onCreateOptionsMenu(menu);
     }
 
@@ -187,12 +200,14 @@ public class MainActivity extends AppCompatActivity implements SwipeRefreshLayou
                 List<Repo> result = new ArrayList<>();
 
                 if (this.username != null) {
-                    call = service.listReposByUser(this.username, this.page, 10);
+                    call = service.listReposByUser(this.username, this.page, 20);
 
                     result = call.execute().body();
 
                     if (result != null && result.size() > 0) {
                         byUsers.addAll(result);
+                    } else {
+                        reachEnd = true;
                     }
 
                 } else {
@@ -241,11 +256,21 @@ public class MainActivity extends AppCompatActivity implements SwipeRefreshLayou
 
         @SuppressLint("CheckResult")
         private void handleListByUser() {
-            RepoItemAdapter adapter = new RepoItemAdapter(byUsers, MainActivity.this);
 
-            adapter.getItemClicked().subscribe(t -> navigate(t.getId()));
+            if (!loading) {
+                RepoItemAdapter adapter = new RepoItemAdapter(byUsers, MainActivity.this);
 
-            listView.setAdapter(adapter);
+                adapter.getItemClicked().subscribe(t -> navigate(t.getId()));
+
+                listView.setAdapter(adapter);
+
+            } else {
+                RepoItemAdapter adapter = (RepoItemAdapter) listView.getAdapter();
+
+                adapter.notifyDataSetChanged();
+
+                adapter.getItemClicked().subscribe(t -> navigate(t.getId()));
+            }
         }
     }
 }
